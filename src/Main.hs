@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings, DeriveGeneric #-}
 
 import GHC.Generics
+import Control.Concurrent
 import Control.Applicative
 import Control.Monad
 import Network.HTTP.Conduit (simpleHttp)
@@ -13,20 +14,36 @@ import Data.Time.Clock.POSIX
 import qualified Data.ByteString.Lazy.Char8 as C8 (pack, unpack, putStrLn)
 import qualified LastFm
 
-fetchTracks :: String -> IO (Maybe LastFm.RecentTracksResponse)
-fetchTracks apiKey = fmap decode $ simpleHttp $ "http://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks&user=badg&format=json&api_key=" ++ apiKey
+apiKey = "cc5a08a82ef3d31fef33894f0fbd54cc"
+apiCallDelay = 1000000 -- 1 sec in microseconds
+pageSize = 200
 
-responseAsScrobbles :: LastFm.RecentTracksResponse -> [LastFm.Track]
-responseAsScrobbles = LastFm.track . LastFm.recenttracks
+fetchTracks :: Maybe Int -> IO (Maybe LastFm.RecentTracksResponse)
+fetchTracks page = fmap decode $ simpleHttp $ "http://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks&user=badg&format=json&api_key=" ++ apiKey ++ pageParam where
+    pageParam = case page of
+              Just p -> "&page=" ++ (show p)
+              Nothing -> ""
 
-recentTracks :: String -> IO ()
-recentTracks apiKey = do
-        resp <- fetchTracks apiKey
-        case (fmap responseAsScrobbles resp) of
-            Just r -> C8.putStrLn (encode r)
-            Nothing -> Prelude.putStrLn "empty!"
+scrobbles :: LastFm.RecentTracksResponse -> [LastFm.Track]
+scrobbles = LastFm.track . LastFm.recenttracks
+
+attributes :: LastFm.RecentTracksResponse -> LastFm.Attributes
+attributes = LastFm.attr . LastFm.recenttracks
+
+recentTracks :: Maybe Int -> [LastFm.Track] -> IO ([LastFm.Track])
+recentTracks page collected = do
+        response <- fetchTracks page
+        putStrLn (show response)
+        threadDelay apiCallDelay
+        case response of
+            Just r -> let attrs = attributes r
+                          page = LastFm.page attrs
+                          pages = LastFm.totalPages attrs
+                      in if page < pages 
+                         then recentTracks (Just (page + 1)) (collected ++ (scrobbles r))
+                         else return collected
+            _ -> return collected
 
 main = do
-  apiKey <- fmap (Text.unpack . Text.strip . Text.pack) (readFile "apiKey")
-  putStrLn apiKey
-  recentTracks apiKey
+  tracks <- recentTracks Nothing []
+  C8.putStrLn $ encode $ tracks
