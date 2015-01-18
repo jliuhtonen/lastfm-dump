@@ -54,6 +54,11 @@ instance FromJSON Track where
                             v `parseDateTime` "date"
         parseJSON _ = mzero
 
+instance ToJSON Track where
+        toJSON (Track name artist album url scrobbledAt) =
+            object ["name" .= name, "artist" .= artist, "album" .= album, 
+                    "url" .= url, "scrobbledAt" .= scrobbledAt]
+
 data NamedRef = NamedRef {
     refName :: !Text,
     mbid :: !Text
@@ -63,6 +68,9 @@ instance FromJSON NamedRef where
         parseJSON (Object v) = NamedRef <$>
                             v .: "#text" <*>
                             v .: "mbid"
+
+instance ToJSON NamedRef where
+        toJSON (NamedRef refName mbid) = object ["name" .= refName, "mbid" .= mbid]
 
 data Attributes = Attributes {
     user :: !Text,
