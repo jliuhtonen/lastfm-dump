@@ -82,12 +82,17 @@ instance FromJSON Attributes where
                             v `parseInt` "totalPages" <*>
                             v `parseInt` "total"
 
-fetchTracks :: IO (Maybe RecentTracksResponse)
-fetchTracks = fmap decode $ simpleHttp "http://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks&user=badg&api_key=cc5a08a82ef3d31fef33894f0fbd54cc&format=json"
+fetchTracks :: String -> IO (Maybe RecentTracksResponse)
+fetchTracks apiKey = fmap decode $ simpleHttp $ "http://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks&user=badg&format=json&api_key=" ++ apiKey
 
-recentTracks :: IO ()
-recentTracks = do
-        resp <- fetchTracks
+recentTracks :: String -> IO ()
+recentTracks apiKey = do
+        resp <- fetchTracks apiKey
         case resp of
             Just r -> Prelude.putStrLn (show r)
             Nothing -> Prelude.putStrLn "empty!"
+
+main = do
+  apiKey <- fmap (unpack . strip . pack) (readFile "apiKey")
+  putStrLn apiKey
+  recentTracks apiKey
