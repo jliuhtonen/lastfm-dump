@@ -11,18 +11,25 @@ import qualified Data.Text as Text
 import Data.Time
 import Data.Maybe
 import Data.Time.Clock.POSIX
-import qualified Data.ByteString.Lazy.Char8 as C8 (pack, unpack, putStrLn)
+import qualified Data.ByteString.Lazy.Char8 as C8 (pack, unpack, putStrLn, writeFile)
 import qualified LastFm
 
 apiKey = "cc5a08a82ef3d31fef33894f0fbd54cc"
 apiCallDelay = 1000000 -- 1 sec in microseconds
 pageSize = 200
 
+urlParam :: Show a => String -> Maybe a -> String
+urlParam pName mValue = maybe "" f mValue where
+    f = ((++) (pName ++ "=")) . show
+
 fetchTracks :: Maybe Int -> IO (Maybe LastFm.RecentTracksResponse)
-fetchTracks page = fmap decode $ simpleHttp $ "http://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks&user=badg&format=json&api_key=" ++ apiKey ++ pageParam where
-    pageParam = case page of
-              Just p -> "&page=" ++ (show p)
-              Nothing -> ""
+fetchTracks page = do
+                      let pageParam' = urlParam "page" page
+                      let url = "http://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks&user=badg&limit=200&format=json&api_key=" ++ apiKey ++ "&" ++ pageParam'
+                      putStrLn $ "url" ++ url
+                      httpResponse <- simpleHttp url
+                      putStrLn (show httpResponse)
+                      return $ decode httpResponse
 
 scrobbles :: LastFm.RecentTracksResponse -> [LastFm.Track]
 scrobbles = LastFm.track . LastFm.recenttracks
@@ -46,15 +53,8 @@ recentTracks page collected = do
         response <- fetchTracks page
         putStrLn (show response)
         threadDelay apiCallDelay
-        case response of
-            Just r -> let attrs = attributes r
-                          page = LastFm.page attrs
-                          pages = LastFm.totalPages attrs
-                      in if page < pages 
-                         then recentTracks (Just (page + 1)) (collected ++ (scrobbles r))
-                         else return collected
-            _ -> return collected
+        handleResponse response collected
 
 main = do
   tracks <- recentTracks Nothing []
-  C8.putStrLn $ encode $ tracks
+  C8.writeFile "badg.json" $ encode tracks
