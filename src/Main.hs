@@ -30,6 +30,17 @@ scrobbles = LastFm.track . LastFm.recenttracks
 attributes :: LastFm.RecentTracksResponse -> LastFm.Attributes
 attributes = LastFm.attr . LastFm.recenttracks
 
+handleResponse :: Maybe LastFm.RecentTracksResponse -> [LastFm.Track] -> IO [LastFm.Track]
+handleResponse (Just r) collected = 
+        if page < pages
+        then recentTracks (Just (page + 1)) allTracks
+        else return allTracks where
+            allTracks = scrobbles r ++ collected
+            attrs = attributes r
+            page = LastFm.page attrs
+            pages = LastFm.totalPages attrs
+handleResponse _ collected = return collected
+
 recentTracks :: Maybe Int -> [LastFm.Track] -> IO ([LastFm.Track])
 recentTracks page collected = do
         response <- fetchTracks page
