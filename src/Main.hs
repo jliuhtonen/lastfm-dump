@@ -34,7 +34,7 @@ optUrlParam key mValue = maybe "" (urlParam key) mValue
 
 buildParams :: String -> Maybe Int -> String
 buildParams user page = "?" ++ intercalate "&" params  where
-        params = [methodP, userP, limitP, formatP, apiKeyP, pageP]
+        params = filter (\x -> length x > 0) [methodP, userP, limitP, formatP, apiKeyP, pageP]
         methodP = urlParam "method" "user.getrecenttracks"
         userP = urlParam "user" user
         limitP = urlParam "limit" pageSize
@@ -42,7 +42,7 @@ buildParams user page = "?" ++ intercalate "&" params  where
         formatP = urlParam "format" "json"
         pageP = optUrlParam "page" page
 
-fetchTracks :: Maybe Int -> IO (Maybe LastFm.RecentTracksResponse)
+fetchTracks :: Maybe Int -> IO (Maybe LastFm.Response)
 fetchTracks page = do
                       let pageParam' = optUrlParam "page" page
                       let url = baseUrl ++ buildParams "badg" page 
@@ -51,29 +51,30 @@ fetchTracks page = do
                       putStrLn (show httpResponse)
                       return $ decode httpResponse
 
-scrobbles :: LastFm.RecentTracksResponse -> [LastFm.Track]
-scrobbles = LastFm.track . LastFm.recenttracks
+scrobbles :: LastFm.RecentTracks -> [LastFm.Track]
+scrobbles = LastFm.track
 
-attributes :: LastFm.RecentTracksResponse -> LastFm.Attributes
-attributes = LastFm.attr . LastFm.recenttracks
+attributes :: LastFm.RecentTracks -> LastFm.Attributes
+attributes = LastFm.attr
 
-handleResponse :: Maybe LastFm.RecentTracksResponse -> [LastFm.Track] -> IO [LastFm.Track]
-handleResponse (Just r) collected = 
-        if page < pages
-        then recentTracks (Just (page + 1)) allTracks
+handleResponse :: Maybe Int -> Maybe LastFm.Response -> [LastFm.Track] -> IO [LastFm.Track]
+handleResponse page (Just (LastFm.RecentTracksResponse r)) collected = 
+        if page' < pages
+        then recentTracks (Just (page' + 1)) allTracks
         else return allTracks where
-            allTracks = scrobbles r ++ collected
-            attrs = attributes r
-            page = LastFm.page attrs
+            allTracks = LastFm.track r ++ collected
+            attrs = LastFm.attr r
+            page' = LastFm.page attrs
             pages = LastFm.totalPages attrs
-handleResponse _ collected = return collected
+handleResponse page (Just (LastFm.Error _ _ _)) collected = recentTracks page collected 
+handleResponse _ _ collected = return collected
 
 recentTracks :: Maybe Int -> [LastFm.Track] -> IO ([LastFm.Track])
 recentTracks page collected = do
         response <- fetchTracks page
         putStrLn (show response)
         threadDelay apiCallDelay
-        handleResponse response collected
+        handleResponse page response collected
 
 main = do
   tracks <- recentTracks Nothing []

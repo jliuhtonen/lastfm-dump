@@ -4,7 +4,10 @@ module LastFm where
 import GHC.Generics
 import Control.Applicative
 import Control.Monad
+import Control.Lens ((^?))
 import Data.Aeson
+import Data.Aeson.Lens
+import Data.Maybe
 import Data.Text
 import Data.Time
 import Data.Time.Clock.POSIX
@@ -20,11 +23,25 @@ parseDateTime v f = do
         let timestamp = date `parseInt` "uts"
         fmap toUTCTime timestamp
 
-data RecentTracksResponse = RecentTracksResponse {
-    recenttracks :: RecentTracks
-} deriving (Show, Generic)
+data Response = RecentTracksResponse {
+    recenttracks :: RecentTracks              
+} | Error {
+    error :: Int,
+    message :: !Text,
+    links :: [Text]
+} deriving Show
 
-instance FromJSON RecentTracksResponse
+instance FromJSON Response where
+        parseJSON json
+            | isJust (json ^? key "recenttracks") = 
+                case json of 
+                             Object v -> RecentTracksResponse <$> v .: "recenttracks"
+                             _ -> mzero
+            | isJust (json ^? key "error") = 
+                case json of
+                    (Object v) -> LastFm.Error <$> v .: "error" <*> v .: "message" <*> v .: "links"
+                    _ -> mzero
+            | otherwise = mzero
 
 data RecentTracks = RecentTracks {
     track :: [Track],                    
