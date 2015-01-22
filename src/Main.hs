@@ -51,12 +51,6 @@ fetchTracks page = do
                       putStrLn (show httpResponse)
                       return $ decode httpResponse
 
-scrobbles :: LastFm.RecentTracks -> [LastFm.Track]
-scrobbles = LastFm.track
-
-attributes :: LastFm.RecentTracks -> LastFm.Attributes
-attributes = LastFm.attr
-
 handleResponse :: Maybe Int -> Maybe LastFm.Response -> [LastFm.Track] -> IO [LastFm.Track]
 handleResponse page (Just (LastFm.RecentTracksResponse r)) collected = 
         if page' < pages
