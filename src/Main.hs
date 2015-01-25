@@ -46,9 +46,6 @@ buildParams user page = "?" ++ intercalate "&" params  where
         formatP = urlParam "format" "json"
         pageP = optUrlParam "page" page
 
-toDocument :: LastFm.Track -> Bson.Document
-toDocument t = [ "name" =: (LastFm.name t) ]
-
 fetchTracks :: Maybe Int -> IO (Maybe LastFm.Response)
 fetchTracks page = do
                       let pageParam' = optUrlParam "page" page
@@ -64,13 +61,12 @@ handleResponse page mongoPipe (Just (LastFm.RecentTracksResponse r)) = do
         if page' < pages
         then recentTracks (Just (page' + 1)) mongoPipe
         else return () where
-            tracks = fmap toDocument (LastFm.track r)
+            tracks = fmap LastFm.toDocument (LastFm.track r)
             attrs = LastFm.attr r
             page' = LastFm.page attrs
             pages = LastFm.totalPages attrs
             inMongo = access mongoPipe master "scrobbles"
-handleResponse page mongoPipe (Just (LastFm.Error _ _ _)) = recentTracks page mongoPipe
-handleResponse _ _ _ = return ()
+handleResponse page mongoPipe _ = recentTracks page mongoPipe
 
 recentTracks :: Maybe Int -> Pipe -> IO ()
 recentTracks page mongoPipe = do

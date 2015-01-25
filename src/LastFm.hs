@@ -12,6 +12,7 @@ import Data.Text
 import Data.Time
 import Data.Time.Clock.POSIX
 import qualified Data.Aeson.Types as AesonTypes
+import Database.MongoDB
     
 parseInt :: AesonTypes.Object -> Text -> AesonTypes.Parser Int
 parseInt v f = fmap (read :: String -> Int) $ v .: f
@@ -22,6 +23,9 @@ parseDateTime v f = do
         let toUTCTime = posixSecondsToUTCTime . fromIntegral
         let timestamp = date `parseInt` "uts"
         fmap toUTCTime timestamp
+
+class ToDocument a where
+        toDocument :: a -> Document
 
 data Response = RecentTracksResponse {
     recenttracks :: RecentTracks              
@@ -71,10 +75,13 @@ instance FromJSON Track where
                             v `parseDateTime` "date"
         parseJSON _ = mzero
 
-instance ToJSON Track where
-        toJSON (Track name artist album url scrobbledAt) =
-            object ["name" .= name, "artist" .= artist, "album" .= album, 
-                    "url" .= url, "scrobbledAt" .= scrobbledAt]
+instance ToDocument Track where
+        toDocument (Track name artist album url scrobbledAt) = 
+            ["name" =: name, 
+                "artist" =: (toDocument artist),
+                "album" =: (toDocument album), 
+                "url" =: url,
+                "scrobbledAt" =: scrobbledAt]
 
 data NamedRef = NamedRef {
     refName :: !Text,
@@ -86,8 +93,8 @@ instance FromJSON NamedRef where
                             v .: "#text" <*>
                             v .: "mbid"
 
-instance ToJSON NamedRef where
-        toJSON (NamedRef refName mbid) = object ["name" .= refName, "mbid" .= mbid]
+instance ToDocument NamedRef where
+        toDocument (NamedRef refName mbid) = ["name" =: refName, "mbid" =: mbid]
 
 data Attributes = Attributes {
     user :: !Text,
