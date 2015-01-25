@@ -14,11 +14,15 @@ import Data.List (intercalate)
 import Data.Time.Clock.POSIX
 import qualified Data.ByteString.Lazy.Char8 as C8 (pack, unpack, putStrLn, writeFile)
 import qualified LastFm
+import Database.MongoDB
+import qualified Data.Bson as Bson (Document)
 
 apiKey = "cc5a08a82ef3d31fef33894f0fbd54cc"
 apiCallDelay = 1000000 -- 1 sec in microseconds
 pageSize = 200
 baseUrl = "http://ws.audioscrobbler.com/2.0/"
+
+mongoserver = "127.0.0.1"
 
 removeQuotes :: String -> String
 removeQuotes = filter $ not . ((==) '"')
@@ -42,6 +46,9 @@ buildParams user page = "?" ++ intercalate "&" params  where
         formatP = urlParam "format" "json"
         pageP = optUrlParam "page" page
 
+toDocument :: LastFm.Track -> Bson.Document
+toDocument t = [ "name" =: (LastFm.name t) ]
+
 fetchTracks :: Maybe Int -> IO (Maybe LastFm.Response)
 fetchTracks page = do
                       let pageParam' = optUrlParam "page" page
@@ -51,25 +58,28 @@ fetchTracks page = do
                       putStrLn (show httpResponse)
                       return $ decode httpResponse
 
-handleResponse :: Maybe Int -> Maybe LastFm.Response -> [LastFm.Track] -> IO [LastFm.Track]
-handleResponse page (Just (LastFm.RecentTracksResponse r)) collected = 
+handleResponse :: Maybe Int -> Pipe -> Maybe LastFm.Response -> IO ()
+handleResponse page mongoPipe (Just (LastFm.RecentTracksResponse r)) = do
+        inMongo $ insertMany "scrobbles" tracks
         if page' < pages
-        then recentTracks (Just (page' + 1)) allTracks
-        else return allTracks where
-            allTracks = LastFm.track r ++ collected
+        then recentTracks (Just (page' + 1)) mongoPipe
+        else return () where
+            tracks = fmap toDocument (LastFm.track r)
             attrs = LastFm.attr r
             page' = LastFm.page attrs
             pages = LastFm.totalPages attrs
-handleResponse page (Just (LastFm.Error _ _ _)) collected = recentTracks page collected 
-handleResponse _ _ collected = return collected
+            inMongo = access mongoPipe master "scrobbles"
+handleResponse page mongoPipe (Just (LastFm.Error _ _ _)) = recentTracks page mongoPipe
+handleResponse _ _ _ = return ()
 
-recentTracks :: Maybe Int -> [LastFm.Track] -> IO ([LastFm.Track])
-recentTracks page collected = do
+recentTracks :: Maybe Int -> Pipe -> IO ()
+recentTracks page mongoPipe = do
         response <- fetchTracks page
         putStrLn (show response)
         threadDelay apiCallDelay
-        handleResponse page response collected
+        handleResponse page mongoPipe response
 
 main = do
-  tracks <- recentTracks Nothing []
-  C8.writeFile "badg.json" $ encode tracks
+  mongoPipe <- connect $ host mongoserver
+  recentTracks Nothing mongoPipe
+  close mongoPipe
