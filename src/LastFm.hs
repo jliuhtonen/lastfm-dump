@@ -17,12 +17,13 @@ import Database.MongoDB
 parseInt :: AesonTypes.Object -> Text -> AesonTypes.Parser Int
 parseInt v f = fmap (read :: String -> Int) $ v .: f
 
-parseDateTime :: AesonTypes.Object -> Text -> AesonTypes.Parser UTCTime
+parseDateTime :: AesonTypes.Object -> Text -> AesonTypes.Parser (Maybe UTCTime)
 parseDateTime v f = do
-        date <- v .: f
+        date <- v .:? f
         let toUTCTime = posixSecondsToUTCTime . fromIntegral
-        let timestamp = date `parseInt` "uts"
-        fmap toUTCTime timestamp
+        case date of
+            Just (Object o) -> fmap (Just . toUTCTime) (o `parseInt` "uts")
+            Nothing -> return Nothing
 
 class ToDocument a where
         toDocument :: a -> Document
@@ -63,7 +64,7 @@ data Track = Track {
     artist :: NamedRef,
     album :: NamedRef,
     url :: !Text,
-    scrobbledAt :: UTCTime
+    scrobbledAt :: Maybe UTCTime
 } deriving Show
 
 instance FromJSON Track where

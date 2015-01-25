@@ -61,12 +61,13 @@ handleResponse page mongoPipe (Just (LastFm.RecentTracksResponse r)) = do
         if page' < pages
         then recentTracks (Just (page' + 1)) mongoPipe
         else return () where
-            tracks = fmap LastFm.toDocument (LastFm.track r)
+            tracks = fmap LastFm.toDocument $ filter (isJust . LastFm.scrobbledAt) (LastFm.track r)
             attrs = LastFm.attr r
             page' = LastFm.page attrs
             pages = LastFm.totalPages attrs
             inMongo = access mongoPipe master "scrobbles"
-handleResponse page mongoPipe _ = recentTracks page mongoPipe
+handleResponse page mongoPipe (Just (LastFm.Error _ _ _)) = recentTracks page mongoPipe
+handleResponse page mongoPipe Nothing = return ()
 
 recentTracks :: Maybe Int -> Pipe -> IO ()
 recentTracks page mongoPipe = do
