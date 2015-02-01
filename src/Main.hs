@@ -4,7 +4,8 @@ import GHC.Generics
 import Control.Concurrent
 import Control.Applicative
 import Control.Monad
-import Network.HTTP.Conduit (simpleHttp)
+import Control.Monad.IO.Class (liftIO)
+import Network.HTTP.Conduit hiding (host)
 import Data.Aeson
 import qualified Data.Aeson.Types as AesonTypes
 import qualified Data.Text as Text
@@ -46,37 +47,40 @@ buildParams user page = "?" ++ intercalate "&" params  where
         formatP = urlParam "format" "json"
         pageP = optUrlParam "page" page
 
-fetchTracks :: Maybe Int -> IO (Maybe LastFm.Response)
-fetchTracks page = do
+fetchTracks :: Manager -> Maybe Int -> IO (Maybe LastFm.Response)
+fetchTracks manager page = do
                       let pageParam' = optUrlParam "page" page
                       let url = baseUrl ++ buildParams "badg" page 
                       putStrLn $ "url" ++ url
-                      httpResponse <- simpleHttp url
-                      putStrLn (show httpResponse)
-                      return $ decode httpResponse
+                      request <- parseUrl url
+                      response <- httpLbs request manager
+                      let body = responseBody response
+                      putStrLn (show body)
+                      return $ decode body
 
-handleResponse :: Maybe Int -> Pipe -> Maybe LastFm.Response -> IO ()
-handleResponse page mongoPipe (Just (LastFm.RecentTracksResponse r)) = do
+handleResponse :: Maybe Int -> Pipe -> Manager -> Maybe LastFm.Response -> IO ()
+handleResponse page mongoPipe manager (Just (LastFm.RecentTracksResponse r)) = do
         inMongo $ insertMany "scrobbles" tracks
         if page' < pages
-        then recentTracks (Just (page' + 1)) mongoPipe
+        then recentTracks (Just (page' + 1)) mongoPipe manager
         else return () where
             tracks = fmap LastFm.toDocument $ filter (isJust . LastFm.scrobbledAt) (LastFm.track r)
             attrs = LastFm.attr r
             page' = LastFm.page attrs
             pages = LastFm.totalPages attrs
             inMongo = access mongoPipe master "scrobbles"
-handleResponse page mongoPipe (Just (LastFm.Error _ _ _)) = recentTracks page mongoPipe
-handleResponse page mongoPipe Nothing = return ()
+handleResponse page mongoPipe manager (Just (LastFm.Error _ _ _)) = recentTracks page mongoPipe manager
+handleResponse page _ _ Nothing = return ()
 
-recentTracks :: Maybe Int -> Pipe -> IO ()
-recentTracks page mongoPipe = do
-        response <- fetchTracks page
+recentTracks :: Maybe Int -> Pipe -> Manager -> IO ()
+recentTracks page mongoPipe manager = do
+        response <- fetchTracks manager page
         putStrLn (show response)
         threadDelay apiCallDelay
-        handleResponse page mongoPipe response
+        handleResponse page mongoPipe manager response
 
 main = do
   mongoPipe <- connect $ host mongoserver
-  recentTracks Nothing mongoPipe
+  withManager $ \manager -> do
+      liftIO $ recentTracks Nothing mongoPipe manager
   close mongoPipe
