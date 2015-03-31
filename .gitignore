@@ -2,3 +2,5 @@
 apiKey
 dist/
 *.json
+.cabal-sandbox/
+cabal.sandbox.config
