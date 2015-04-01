@@ -13,50 +13,38 @@ import Data.Time
 import Data.Maybe
 import Data.List (intercalate)
 import Data.Time.Clock.POSIX
-import qualified Data.ByteString.Lazy.Char8 as C8 (pack, unpack, putStrLn, writeFile)
+import qualified Data.ByteString.Char8 as StrictC8 
+import qualified Data.ByteString.Lazy.Char8 as C8 (pack, unpack, putStrLn, writeFile, toStrict)
 import qualified LastFm
 import Database.MongoDB
 import qualified Data.Bson as Bson (Document)
+import Control.Exception (catch)
 
 apiKey = "cc5a08a82ef3d31fef33894f0fbd54cc"
 apiCallDelay = 1000000 -- 1 sec in microseconds
 pageSize = 200
-baseUrl = "http://ws.audioscrobbler.com/2.0/"
+url = "http://ws.audioscrobbler.com/2.0/"
 
 mongoserver = "127.0.0.1"
 
-removeQuotes :: String -> String
-removeQuotes = filter $ not . ((==) '"')
+toByteString :: Int -> StrictC8.ByteString
+toByteString = StrictC8.pack . show
 
-toPlainString :: Show a => a -> String
-toPlainString = removeQuotes . show
-
-urlParam :: Show a => String -> a -> String
-urlParam key value = key ++ "=" ++ (toPlainString value)
-
-optUrlParam :: Show a => String -> Maybe a -> String
-optUrlParam key mValue = maybe "" (urlParam key) mValue
-
-buildParams :: String -> Maybe Int -> String
-buildParams user page = "?" ++ intercalate "&" params  where
-        params = filter (\x -> length x > 0) [methodP, userP, limitP, formatP, apiKeyP, pageP]
-        methodP = urlParam "method" "user.getrecenttracks"
-        userP = urlParam "user" user
-        limitP = urlParam "limit" pageSize
-        apiKeyP = urlParam "api_key" apiKey
-        formatP = urlParam "format" "json"
-        pageP = optUrlParam "page" page
+requestWithParams :: String -> Maybe Int -> Request -> Request
+requestWithParams user page request = setQueryString params request where
+	params = [("method", Just "user.getrecenttracks"),
+		  ("user", Just (StrictC8.pack user)),
+		  ("limit", Just (toByteString pageSize)),
+		  ("api_key", Just apiKey),
+		  ("format", Just "json"),
+		  ("page", fmap toByteString page)]
 
 fetchTracks :: Manager -> Maybe Int -> IO (Maybe LastFm.Response)
 fetchTracks manager page = do
-                      let pageParam' = optUrlParam "page" page
-                      let url = baseUrl ++ buildParams "badg" page 
-                      putStrLn $ "url" ++ url
-                      request <- parseUrl url
+                      request <- fmap (requestWithParams "badg" page) $ parseUrl url
+		      putStrLn $ show request
                       response <- httpLbs request manager
-                      let body = responseBody response
-                      putStrLn (show body)
-                      return $ decode body
+                      return $ decode $ responseBody response 
 
 handleResponse :: Maybe Int -> Pipe -> Manager -> Maybe LastFm.Response -> IO ()
 handleResponse page mongoPipe manager (Just (LastFm.RecentTracksResponse r)) = do
