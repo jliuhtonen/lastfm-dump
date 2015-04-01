@@ -1,24 +1,15 @@
 {-# LANGUAGE OverloadedStrings, DeriveGeneric #-}
 
-import GHC.Generics
-import Control.Concurrent
-import Control.Applicative
+import Control.Concurrent (threadDelay)
 import Control.Monad
 import Control.Monad.IO.Class (liftIO)
-import Network.HTTP.Conduit hiding (host)
 import Data.Aeson
-import qualified Data.Aeson.Types as AesonTypes
-import qualified Data.Text as Text
-import Data.Time
 import Data.Maybe
-import Data.List (intercalate)
-import Data.Time.Clock.POSIX
-import qualified Data.ByteString.Char8 as StrictC8 
-import qualified Data.ByteString.Lazy.Char8 as C8 (pack, unpack, putStrLn, writeFile, toStrict)
-import qualified LastFm
 import Database.MongoDB
+import Network.HTTP.Conduit hiding (host)
 import qualified Data.Bson as Bson (Document)
-import Control.Exception (catch)
+import qualified Data.ByteString.Char8 as StrictC8
+import qualified LastFm
 
 apiKey = "cc5a08a82ef3d31fef33894f0fbd54cc"
 apiCallDelay = 1000000 -- 1 sec in microseconds
