@@ -8,7 +8,7 @@ import Control.Lens ((^?))
 import Data.Aeson
 import Data.Aeson.Lens
 import Data.Maybe
-import Data.Text
+import Data.Text hiding (filter)
 import Data.Time
 import Data.Time.Clock.POSIX
 import qualified Data.Aeson.Types as AesonTypes
@@ -112,3 +112,10 @@ instance FromJSON Attributes where
                             v `parseInt` "perPage" <*>
                             v `parseInt` "totalPages" <*>
                             v `parseInt` "total"
+
+timestampedScrobbles :: RecentTracks -> [Track]
+timestampedScrobbles rt = filter (isJust . scrobbledAt) $ track rt 
+
+paging :: RecentTracks -> (Int, Int)
+paging rt = (page attrs, totalPages attrs) where
+    attrs = attr rt
