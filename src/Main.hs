@@ -5,6 +5,7 @@ import Control.Monad
 import Control.Monad.IO.Class (liftIO)
 import Data.Aeson
 import Data.Maybe
+import Data.Text
 import Database.MongoDB
 import Network.HTTP.Conduit hiding (host)
 import qualified Data.Bson as Bson (Document)
@@ -34,19 +35,30 @@ requestWithParams user page request = setQueryString params request where
 fetchTracks :: Manager -> Maybe Int -> IO (Maybe LastFm.Response)
 fetchTracks manager page = do
         request <- fmap (requestWithParams "badg" page) $ parseUrl url
-        putStrLn $ show request
         response <- httpLbs request manager
         return $ decode $ responseBody response 
+
+logPagingStatus :: Int -> Int -> IO ()
+logPagingStatus page pages = putStrLn $ "Fetched page " ++ show page ++ " / " ++ show pages
+
+logError :: Maybe Int -> Int -> Text -> [Text] -> IO ()
+logError page code msg links = 
+        putStrLn $ "Error fetching page " ++ (maybe "0" show page) ++ "\n" ++
+        "Error code " ++ show code ++ "\n" ++
+        "Message: " ++ unpack msg
 
 recentTracks :: Maybe Int -> Pipe -> Manager -> IO ()
 recentTracks page mongoPipe manager = do
         response <- fetchTracks manager page
-        putStrLn (show response)
         threadDelay apiCallDelay
         case response of
             Nothing -> return ()
-            Just (LastFm.Error _ _ _) -> recentTracks page mongoPipe manager
+            Just (LastFm.Error code msg links) -> do 
+                logError page code msg links
+                putStrLn "Retrying..."
+                recentTracks page mongoPipe manager
             Just (LastFm.RecentTracksResponse r) -> do
+                logPagingStatus page' pages
                 inMongo $ insertMany databaseName tracks
                 if page' < pages
                 then recentTracks (Just (page' + 1)) mongoPipe manager
