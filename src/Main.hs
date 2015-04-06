@@ -3,6 +3,8 @@
 import Control.Concurrent (threadDelay)
 import Control.Monad
 import Control.Monad.IO.Class (liftIO)
+import Control.Monad.Trans (lift)
+import Control.Monad.Trans.Reader
 import Data.Aeson
 import Data.Maybe
 import Data.Text
@@ -17,6 +19,14 @@ import Config
 apiCallDelay = 1000000 -- 1 sec in microseconds
 url = "http://ws.audioscrobbler.com/2.0/"
 
+data CrawlerEnv = CrawlerEnv {
+    httpManager :: Manager,
+    mongoPipe :: Pipe,
+    runConfig :: Config
+}
+
+type Crawler = ReaderT CrawlerEnv IO
+
 toByteString :: Int -> StrictC8.ByteString
 toByteString = StrictC8.pack . show
 
@@ -29,13 +39,12 @@ requestWithParams key items user page request = setQueryString params request wh
              ("format", Just "json"),
              ("page", fmap toByteString page)]
 
-fetchTracks :: Config -> Manager -> Maybe Int -> IO (Maybe LastFm.Response)
-fetchTracks config manager page = do
+fetchTracks :: Maybe Int -> Crawler (Maybe LastFm.Response)
+fetchTracks page = do
+        (CrawlerEnv manager _ (Config key _ _ items)) <- ask
         request <- fmap (requestWithParams key items "badg" page) $ parseUrl url
         response <- httpLbs request manager
-        return $ decode $ responseBody response where
-            key = apiKey config
-            items = pageSize config
+        return $ decode $ responseBody response
 
 logPagingStatus :: Int -> Int -> IO ()
 logPagingStatus page pages = putStrLn $ "Fetched page " ++ show page ++ " / " ++ show pages
@@ -46,28 +55,27 @@ logError page code msg links =
         "Error code " ++ show code ++ "\n" ++
         "Message: " ++ unpack msg
 
-recentTracks :: Config -> Maybe Int -> Pipe -> Manager -> IO ()
-recentTracks config page mongoPipe manager = do
-        response <- fetchTracks config manager page
-        threadDelay apiCallDelay
+recentTracks :: Maybe Int -> Crawler ()
+recentTracks page = do
+        response <- fetchTracks page
+        lift $ threadDelay apiCallDelay
         case response of
             Nothing -> return ()
             Just (LastFm.Error code msg links) -> do 
-                logError page code msg links
-                putStrLn "Retrying..."
-                recentTracks config page mongoPipe manager
+                lift $ logError page code msg links >> putStrLn "Retrying..."
+                recentTracks page 
             Just (LastFm.RecentTracksResponse r) -> do
-                logPagingStatus page' pages
-                inMongo $ insertMany databaseName tracks
+                (CrawlerEnv manager mongoPipe (Config _ _ databaseName _)) <- ask
+                let tracks = fmap LastFm.toDocument $ LastFm.timestampedScrobbles r
+                let paging = LastFm.paging r
+                let page' = fst paging
+                let pages = snd paging
+                let inMongo = access mongoPipe master databaseName
+                lift $ logPagingStatus page' pages
+                lift $ inMongo $ insertMany databaseName tracks
                 if page' < pages
-                then recentTracks config (Just (page' + 1)) mongoPipe manager
-                else return () where
-                    tracks = fmap LastFm.toDocument $ LastFm.timestampedScrobbles r
-                    paging = LastFm.paging r
-                    page' = fst paging
-                    pages = snd paging
-                    databaseName = mongoDatabase config
-                    inMongo = access mongoPipe master databaseName
+                then recentTracks (Just (page' + 1)) 
+                else return ()
 
 main = do
     config <- readConfig
@@ -76,5 +84,5 @@ main = do
         Just cfg@(Config _ _ _ _) -> do
             mongoPipe <- connect $ host $ unpack $ mongoServer cfg
             withManager $ \manager -> do
-                liftIO $ recentTracks cfg Nothing mongoPipe manager
+                liftIO $ runReaderT (recentTracks Nothing) $ CrawlerEnv manager mongoPipe cfg
             close mongoPipe
