@@ -30,30 +30,30 @@ type Crawler = ReaderT CrawlerEnv IO
 toByteString :: Int -> StrictC8.ByteString
 toByteString = StrictC8.pack . show
 
-requestWithParams :: Text -> Int -> String -> Maybe Int -> Request -> Request
+logPagingStatus page pages = putStrLn $ "Fetched page " ++ show page ++ " / " ++ show pages
+
+logError page code msg = 
+        putStrLn $ "Error fetching page " ++ show page ++ "\n" ++
+        "Error code " ++ show code ++ "\n" ++
+        "Message: " ++ unpack msg
+
+requestWithParams :: Text -> Int -> String -> Int -> Request -> Request
 requestWithParams key items user page request = setQueryString params request where
     params = [("method", Just "user.getrecenttracks"),
              ("user", Just (StrictC8.pack user)),
              ("limit", Just (toByteString items)),
              ("api_key", Just (encodeUtf8 key)),
              ("format", Just "json"),
-             ("page", fmap toByteString page)]
+             ("page", Just (toByteString page))]
 
-fetchTracks :: Maybe Int -> Crawler (Maybe LastFm.Response)
+fetchTracks :: Int -> Crawler (Maybe LastFm.Response)
 fetchTracks page = do
         (CrawlerEnv manager _ (Config key _ _ items)) <- ask
         request <- fmap (requestWithParams key items "badg" page) $ parseUrl url
         response <- httpLbs request manager
         return $ decode $ responseBody response
 
-logPagingStatus page pages = putStrLn $ "Fetched page " ++ show page ++ " / " ++ show pages
-
-logError page code msg = 
-        putStrLn $ "Error fetching page " ++ (maybe "0" show page) ++ "\n" ++
-        "Error code " ++ show code ++ "\n" ++
-        "Message: " ++ unpack msg
-
-handleError :: Maybe Int -> Int -> Text -> Crawler ()
+handleError :: Int -> Int -> Text -> Crawler ()
 handleError page code msg = errorOutput >> recentTracks page where
            errorOutput = lift $ logError page code msg >> 
                 putStrLn "Retrying..." 
@@ -72,10 +72,10 @@ handleResponse tracks = do
         let (page, pages) = LastFm.paging tracks
         lift $ logPagingStatus page pages
         if page < pages
-        then recentTracks (Just (page + 1)) 
+        then recentTracks $ page + 1 
         else return ()
 
-recentTracks :: Maybe Int -> Crawler ()
+recentTracks :: Int -> Crawler ()
 recentTracks page = do
         response <- fetchTracks page
         lift $ threadDelay apiCallDelay
@@ -92,5 +92,5 @@ main = do
             mongoPipe <- connect $ host $ unpack $ mongoServer cfg
             withManager $ \manager -> do
                 let env = CrawlerEnv manager mongoPipe cfg
-                liftIO $ runReaderT (recentTracks Nothing) env 
+                liftIO $ runReaderT (recentTracks 0) env 
             close mongoPipe
