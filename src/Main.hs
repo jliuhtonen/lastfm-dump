@@ -46,7 +46,6 @@ fetchTracks page = do
         response <- httpLbs request manager
         return $ decode $ responseBody response
 
-logPagingStatus :: Int -> Int -> IO ()
 logPagingStatus page pages = putStrLn $ "Fetched page " ++ show page ++ " / " ++ show pages
 
 logError page code msg = 
@@ -59,17 +58,21 @@ handleError page code msg = errorOutput >> recentTracks page where
            errorOutput = lift $ logError page code msg >> 
                 putStrLn "Retrying..." 
 
-handleResponse :: LastFm.RecentTracks -> Crawler ()
-handleResponse tracks = do
+persist :: [LastFm.Track] -> Crawler ()
+persist tracks = do
         (CrawlerEnv _ mongoPipe cfg) <- ask
         let databaseName = mongoDatabase cfg
-        let tracks' = fmap LastFm.toDocument $ LastFm.timestampedScrobbles tracks
-        let (page', pages) = LastFm.paging tracks
         let inMongo = access mongoPipe master databaseName
-        lift $ logPagingStatus page' pages
-        lift $ inMongo $ insertMany databaseName tracks'
-        if page' < pages
-        then recentTracks (Just (page' + 1)) 
+        lift $ inMongo $ insertMany databaseName $ fmap LastFm.toDocument tracks
+        return ()
+
+handleResponse :: LastFm.RecentTracks -> Crawler ()
+handleResponse tracks = do
+        persist $ LastFm.timestampedScrobbles tracks
+        let (page, pages) = LastFm.paging tracks
+        lift $ logPagingStatus page pages
+        if page < pages
+        then recentTracks (Just (page + 1)) 
         else return ()
 
 recentTracks :: Maybe Int -> Crawler ()
@@ -88,5 +91,6 @@ main = do
         Just cfg -> do
             mongoPipe <- connect $ host $ unpack $ mongoServer cfg
             withManager $ \manager -> do
-                liftIO $ runReaderT (recentTracks Nothing) $ CrawlerEnv manager mongoPipe cfg
+                let env = CrawlerEnv manager mongoPipe cfg
+                liftIO $ runReaderT (recentTracks Nothing) env 
             close mongoPipe
