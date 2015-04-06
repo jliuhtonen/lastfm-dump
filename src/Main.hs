@@ -67,9 +67,7 @@ recentTracks page = do
             Just (LastFm.RecentTracksResponse r) -> do
                 (CrawlerEnv manager mongoPipe (Config _ _ databaseName _)) <- ask
                 let tracks = fmap LastFm.toDocument $ LastFm.timestampedScrobbles r
-                let paging = LastFm.paging r
-                let page' = fst paging
-                let pages = snd paging
+                let (page', pages) = LastFm.paging r
                 let inMongo = access mongoPipe master databaseName
                 lift $ logPagingStatus page' pages
                 lift $ inMongo $ insertMany databaseName tracks
@@ -81,7 +79,7 @@ main = do
     config <- readConfig
     case config of
         Nothing -> putStrLn "Malformed config.json"
-        Just cfg@(Config _ _ _ _) -> do
+        Just cfg -> do
             mongoPipe <- connect $ host $ unpack $ mongoServer cfg
             withManager $ \manager -> do
                 liftIO $ runReaderT (recentTracks Nothing) $ CrawlerEnv manager mongoPipe cfg
