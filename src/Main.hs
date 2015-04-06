@@ -49,11 +49,28 @@ fetchTracks page = do
 logPagingStatus :: Int -> Int -> IO ()
 logPagingStatus page pages = putStrLn $ "Fetched page " ++ show page ++ " / " ++ show pages
 
-logError :: Maybe Int -> Int -> Text -> [Text] -> IO ()
-logError page code msg links = 
+logError page code msg = 
         putStrLn $ "Error fetching page " ++ (maybe "0" show page) ++ "\n" ++
         "Error code " ++ show code ++ "\n" ++
         "Message: " ++ unpack msg
+
+handleError :: Maybe Int -> Int -> Text -> Crawler ()
+handleError page code msg = errorOutput >> recentTracks page where
+           errorOutput = lift $ logError page code msg >> 
+                putStrLn "Retrying..." 
+
+handleResponse :: LastFm.RecentTracks -> Crawler ()
+handleResponse r = do
+        (CrawlerEnv _ mongoPipe cfg) <- ask
+        let databaseName = mongoDatabase cfg
+        let tracks = fmap LastFm.toDocument $ LastFm.timestampedScrobbles r
+        let (page', pages) = LastFm.paging r
+        let inMongo = access mongoPipe master databaseName
+        lift $ logPagingStatus page' pages
+        lift $ inMongo $ insertMany databaseName tracks
+        if page' < pages
+        then recentTracks (Just (page' + 1)) 
+        else return ()
 
 recentTracks :: Maybe Int -> Crawler ()
 recentTracks page = do
@@ -61,19 +78,8 @@ recentTracks page = do
         lift $ threadDelay apiCallDelay
         case response of
             Nothing -> return ()
-            Just (LastFm.Error code msg links) -> do 
-                lift $ logError page code msg links >> putStrLn "Retrying..."
-                recentTracks page 
-            Just (LastFm.RecentTracksResponse r) -> do
-                (CrawlerEnv manager mongoPipe (Config _ _ databaseName _)) <- ask
-                let tracks = fmap LastFm.toDocument $ LastFm.timestampedScrobbles r
-                let (page', pages) = LastFm.paging r
-                let inMongo = access mongoPipe master databaseName
-                lift $ logPagingStatus page' pages
-                lift $ inMongo $ insertMany databaseName tracks
-                if page' < pages
-                then recentTracks (Just (page' + 1)) 
-                else return ()
+            Just (LastFm.Error code msg _) -> handleError page code msg 
+            Just (LastFm.RecentTracksResponse tracks) -> handleResponse tracks
 
 main = do
     config <- readConfig
