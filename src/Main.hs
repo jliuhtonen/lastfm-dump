@@ -60,14 +60,14 @@ handleError page code msg = errorOutput >> recentTracks page where
                 putStrLn "Retrying..." 
 
 handleResponse :: LastFm.RecentTracks -> Crawler ()
-handleResponse r = do
+handleResponse tracks = do
         (CrawlerEnv _ mongoPipe cfg) <- ask
         let databaseName = mongoDatabase cfg
-        let tracks = fmap LastFm.toDocument $ LastFm.timestampedScrobbles r
-        let (page', pages) = LastFm.paging r
+        let tracks' = fmap LastFm.toDocument $ LastFm.timestampedScrobbles tracks
+        let (page', pages) = LastFm.paging tracks
         let inMongo = access mongoPipe master databaseName
         lift $ logPagingStatus page' pages
-        lift $ inMongo $ insertMany databaseName tracks
+        lift $ inMongo $ insertMany databaseName tracks'
         if page' < pages
         then recentTracks (Just (page' + 1)) 
         else return ()
