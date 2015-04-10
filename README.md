@@ -37,4 +37,6 @@ And you're all set.
 
 The program reads its configuration from config.json. You can find a sample configuration in file config.sample.json.
 
-Then, to transfer your data to Mongo, start your mongod and run the dump with `lastfm-dump username` where username is your Last.fm username.
+Then, to transfer your data to Mongo, start your mongod and run the dump with your username as the command line parameter: 
+
+`lastfm-dump username`
