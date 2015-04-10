@@ -11,6 +11,7 @@ import Data.Text
 import Data.Text.Encoding
 import Database.MongoDB
 import Network.HTTP.Conduit hiding (host)
+import System.Environment (getArgs)
 import qualified Data.Bson as Bson (Document)
 import qualified Data.ByteString.Char8 as StrictC8
 import qualified LastFm
@@ -20,6 +21,7 @@ apiCallDelay = 1000000 -- 1 sec in microseconds
 url = "http://ws.audioscrobbler.com/2.0/"
 
 data CrawlerEnv = CrawlerEnv {
+    lastFmUser :: String,
     httpManager :: Manager,
     mongoPipe :: Pipe,
     runConfig :: Config
@@ -48,8 +50,8 @@ requestWithParams key items user page request = setQueryString params request wh
 
 fetchTracks :: Int -> Crawler (Maybe LastFm.Response)
 fetchTracks page = do
-        (CrawlerEnv manager _ (Config key _ _ items)) <- ask
-        request <- fmap (requestWithParams key items "badg" page) $ parseUrl url
+        (CrawlerEnv lastFmUser manager _ (Config key _ _ items)) <- ask
+        request <- fmap (requestWithParams key items lastFmUser page) $ parseUrl url
         response <- httpLbs request manager
         return $ decode $ responseBody response
 
@@ -60,7 +62,7 @@ handleError page code msg = errorOutput >> recentTracks page where
 
 persist :: [LastFm.Track] -> Crawler ()
 persist tracks = do
-        (CrawlerEnv _ mongoPipe cfg) <- ask
+        (CrawlerEnv _ _ mongoPipe cfg) <- ask
         let databaseName = mongoDatabase cfg
         let inMongo = access mongoPipe master databaseName
         lift $ inMongo $ insertMany databaseName $ fmap LastFm.toDocument tracks
@@ -84,13 +86,20 @@ recentTracks page = do
             Just (LastFm.Error code msg _) -> handleError page code msg 
             Just (LastFm.RecentTracksResponse tracks) -> handleResponse tracks
 
-main = do
+usage = putStrLn "Usage: lastfm-dump username"
+
+runCrawler [user] = do
     config <- readConfig
     case config of
         Nothing -> putStrLn "Malformed config.json"
         Just cfg -> do
             mongoPipe <- connect $ host $ unpack $ mongoServer cfg
             withManager $ \manager -> do
-                let env = CrawlerEnv manager mongoPipe cfg
+                let env = CrawlerEnv user manager mongoPipe cfg
                 liftIO $ runReaderT (recentTracks 0) env 
             close mongoPipe
+
+runCrawler [] = usage
+runCrawler (_:_) = usage 
+
+main = getArgs >>= runCrawler
