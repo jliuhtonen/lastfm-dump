@@ -93,7 +93,7 @@ runCrawler [user] = do
     case config of
         Nothing -> putStrLn "Malformed config.json"
         Just cfg -> do
-            mongoPipe <- connect $ host $ unpack $ mongoServer cfg
+            mongoPipe <- (connect . host . unpack . mongoServer) cfg
             withManager $ \manager -> do
                 let env = CrawlerEnv user manager mongoPipe cfg
                 liftIO $ runReaderT (recentTracks 0) env 
