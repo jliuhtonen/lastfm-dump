@@ -19,7 +19,8 @@ import qualified Data.ByteString.Char8 as StrictC8
 import qualified LastFm
 import Config
 
-apiCallDelay = 1000000 -- 1 sec in microseconds
+apiCallDelay :: Int
+apiCallDelay = 1000000 `div` 5 -- 1 / 5 sec in microseconds
 url = "http://ws.audioscrobbler.com/2.0/"
 
 data CrawlerEnv = CrawlerEnv {
