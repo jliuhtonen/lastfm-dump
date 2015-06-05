@@ -82,7 +82,7 @@ handleResponse tracks = do
         persist $ LastFm.timestampedScrobbles tracks
         let (page, pages) = LastFm.paging tracks
         lift $ logPagingStatus page pages
-        if page > 0
+        if page > 1
         then recentTracks $ page - 1 
         else return ()
 
@@ -106,7 +106,7 @@ latestScrobbleTimestamp mongoPipe databaseName = do
 	return $ fmap (round . utcTimeToPOSIXSeconds) latestScrobbleTime 
 
 numberOfPages :: Crawler Int
-numberOfPages = fetchTracks 0 >>= \response -> case response of
+numberOfPages = fetchTracks 1 >>= \response -> case response of
 	Just (LastFm.RecentTracksResponse tracks) -> return $ (snd . LastFm.paging) tracks
 	_ -> return 0
 	
