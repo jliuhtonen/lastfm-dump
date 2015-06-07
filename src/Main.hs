@@ -36,7 +36,7 @@ type Crawler = ReaderT CrawlerEnv IO
 runMongoAction :: Action IO a -> Crawler a
 runMongoAction action = do
         (CrawlerEnv _ _ _ mongoPipe cfg) <- ask
-        let databaseName = mongoDatabase cfg
+        let databaseName = dbName cfg
         liftIO $ access mongoPipe master databaseName action
 
 toByteString :: Int -> StrictC8.ByteString
@@ -74,7 +74,7 @@ handleError page code msg = errorOutput >> recentTracks page where
 persist :: [LastFm.Track] -> Crawler [Database.MongoDB.Value]
 persist tracks = do
         (CrawlerEnv _ _ _ _ cfg) <- ask
-        let databaseName = mongoDatabase cfg
+        let databaseName = dbName cfg
 	let insertAction = insertMany databaseName $ fmap LastFm.toDocument tracks
         runMongoAction insertAction
 
@@ -119,7 +119,7 @@ initCrawler [user] = do
         Nothing -> putStrLn "Malformed config.json"
         Just cfg -> do
             mongoPipe <- (connect . host . unpack . mongoServer) cfg
-	    let db = mongoDatabase cfg
+	    let db = dbName cfg
 	    lastCrawled <- latestScrobbleTimestamp mongoPipe db
             withManager $ \manager -> do
                 let env = CrawlerEnv lastCrawled user manager mongoPipe cfg

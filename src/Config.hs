@@ -11,7 +11,7 @@ import Data.Aeson
 data Config = Config {
     apiKey :: !Text,
     mongoServer :: !Text,
-    mongoDatabase :: !Text,
+    dbName :: !Text,
     pageSize :: Int
 } deriving (Show, Generic)
 
