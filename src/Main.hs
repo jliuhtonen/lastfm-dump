@@ -44,7 +44,7 @@ toByteString = StrictC8.pack . show
 
 logPagingStatus page pages = putStrLn $ "Fetched page " ++ show page ++ " / " ++ show pages
 
-logError page code msg = 
+logError page code msg =
         putStrLn $ "Error fetching page " ++ show page ++ "\n" ++
         "Error code " ++ show code ++ "\n" ++
         "Message: " ++ unpack msg
@@ -68,8 +68,8 @@ fetchTracks page = do
 
 handleError :: Int -> Int -> Text -> Crawler ()
 handleError page code msg = errorOutput >> recentTracks page where
-           errorOutput = lift $ logError page code msg >> 
-                putStrLn "Retrying..." 
+           errorOutput = lift $ logError page code msg >>
+                putStrLn "Retrying..."
 
 persist :: [LastFm.Track] -> Crawler [Database.MongoDB.Value]
 persist tracks = do
@@ -84,7 +84,7 @@ handleResponse tracks = do
         let (page, pages) = LastFm.paging tracks
         lift $ logPagingStatus page pages
         if page > 1
-        then recentTracks $ page - 1 
+        then recentTracks $ page - 1
         else return ()
 
 recentTracks :: Int -> Crawler ()
@@ -93,7 +93,7 @@ recentTracks page = do
         lift $ threadDelay apiCallDelay
         case response of
             Nothing -> return ()
-            Just (LastFm.Error code msg _) -> handleError page code msg 
+            Just (LastFm.Error code msg _) -> handleError page code msg
             Just (LastFm.RecentTracksResponse tracks) -> handleResponse tracks
 
 usage = putStrLn "Usage: lastfm-dump username"
@@ -103,30 +103,30 @@ latestScrobbleTimestamp mongoPipe databaseName = do
 	let run = access mongoPipe master databaseName
 	let latestScrobbleAction = findOne (select [] "scrobbles") {sort = ["scrobbledAt" =: (-1 :: Int)]}
 	latestScrobbleDocument <- run latestScrobbleAction
-	let latestScrobbleTime = fmap (at "scrobbledAt") latestScrobbleDocument :: Maybe UTCTime 
-	return $ fmap (round . utcTimeToPOSIXSeconds) latestScrobbleTime 
+	let latestScrobbleTime = fmap (at "scrobbledAt") latestScrobbleDocument :: Maybe UTCTime
+	return $ fmap (round . utcTimeToPOSIXSeconds) latestScrobbleTime
 
 numberOfPages :: Crawler Int
 numberOfPages = fetchTracks 1 >>= \response -> case response of
 	Just (LastFm.RecentTracksResponse tracks) -> return $ (snd . LastFm.paging) tracks
 	_ -> return 0
-	
+
 crawl = numberOfPages >>= recentTracks
-	 
+
 initCrawler [user] = do
-    config <- readConfig
-    case config of
-        Nothing -> putStrLn "Malformed config.json"
-        Just cfg -> do
-            mongoPipe <- (connect . host . unpack . mongoServer) cfg
-	    let db = dbName cfg
-	    lastCrawled <- latestScrobbleTimestamp mongoPipe db
-            withManager $ \manager -> do
-                let env = CrawlerEnv lastCrawled user manager mongoPipe cfg
-                liftIO $ runReaderT crawl env 
-            close mongoPipe
+  config <- readConfig
+  case config of
+    Nothing -> putStrLn "Malformed config.json"
+    Just cfg -> do
+      mongoPipe <- (connect . host . unpack . mongoServer) cfg
+      let db = dbName cfg
+      lastCrawled <- latestScrobbleTimestamp mongoPipe db
+      withManager $ \manager -> do
+        let env = CrawlerEnv lastCrawled user manager mongoPipe cfg
+        liftIO $ runReaderT crawl env
+      close mongoPipe
 
 initCrawler [] = usage
-initCrawler (_:_) = usage 
+initCrawler (_:_) = usage
 
 main = getArgs >>= initCrawler
