@@ -89,6 +89,7 @@ handleResponse tracks = do
         else return ()
 
 recentTracks :: Int -> Crawler ()
+recentTracks 0 = return ()
 recentTracks page = do
         response <- fetchTracks page
         lift $ threadDelay apiCallDelay
