@@ -62,7 +62,8 @@ requestWithParams key items user page from request = setQueryString params reque
 fetchTracks :: Int -> Crawler (Maybe LastFm.Response)
 fetchTracks page = do
         (CrawlerEnv lastCrawled lastFmUser manager _ (Config key _ _ items)) <- ask
-        request <- fmap (requestWithParams key items lastFmUser page lastCrawled) $ parseUrl url
+        let scrobblesSince = fmap (+ 1) lastCrawled
+        request <- fmap (requestWithParams key items lastFmUser page scrobblesSince) $ parseUrl url
         response <- httpLbs request manager
         return $ decode $ responseBody response
 
