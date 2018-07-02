@@ -23,12 +23,12 @@ The resulting BSON objects will look like this:
 
 ## Compiling
 
-Install the latest version of Haskell Platform, and...
+Install stack and...
 
 ```
-cabal sandbox init
-cabal install --only-dependencies
-cabal build
+stack setup
+stack docker pull
+stack image container
 ```
 
 And you're all set.
