@@ -4,3 +4,4 @@ dist/
 *.json
 .cabal-sandbox/
 cabal.sandbox.config
+.stack-work/
