@@ -123,9 +123,9 @@ initCrawler [user] = do
       mongoPipe <- (connect . host . unpack . mongoServer) cfg
       let db = dbName cfg
       lastCrawled <- latestScrobbleTimestamp mongoPipe db
-      withManager $ \manager -> do
-        let env = CrawlerEnv lastCrawled user manager mongoPipe cfg
-        liftIO $ runReaderT crawl env
+      manager <- newManager tlsManagerSettings
+      let env = CrawlerEnv lastCrawled user manager mongoPipe cfg
+      liftIO $ runReaderT crawl env
       close mongoPipe
 
 initCrawler [] = usage
