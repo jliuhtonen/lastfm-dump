@@ -47,7 +47,7 @@ logPagingStatus page pages = putStrLn $ "Fetched page " ++ show page ++ " / " ++
 logError page code msg =
         putStrLn $ "Error fetching page " ++ show page ++ "\n" ++
         "Error code " ++ show code ++ "\n" ++
-        "Message: " ++ unpack msg
+        "Message " ++ unpack msg
 
 requestWithParams :: Text -> Int -> String -> Int -> Maybe Int -> Request -> Request
 requestWithParams key items user page from request = setQueryString params request where
