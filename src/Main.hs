@@ -61,7 +61,7 @@ requestWithParams key items user page from request = setQueryString params reque
 
 fetchTracks :: Int -> Crawler (Maybe LastFm.Response)
 fetchTracks page = do
-        (CrawlerEnv lastCrawled lastFmUser manager _ (Config key _ _ items)) <- ask
+        (CrawlerEnv lastCrawled lastFmUser manager _ (Config key _ _ _ _ _ items)) <- ask
         let scrobblesSince = fmap (+ 1) lastCrawled
         request <- fmap (requestWithParams key items lastFmUser page scrobblesSince) $ parseUrl url
         response <- httpLbs request manager
@@ -118,10 +118,13 @@ crawl = numberOfPages >>= recentTracks
 initCrawler [user] = do
   config <- readConfig
   case config of
-    Nothing -> putStrLn "Malformed config.json"
+    Nothing -> putStrLn "Malformed config"
     Just cfg -> do
-      mongoPipe <- (connect . host . unpack . mongoServer) cfg
+      let mongoHost = unpack $ mongoServer cfg
+      let mongoPort = Config.port cfg
+      mongoPipe <- connect $ Host mongoHost mongoPort
       let db = dbName cfg
+      access mongoPipe master db $ auth (Config.user cfg) (password cfg)
       lastCrawled <- latestScrobbleTimestamp mongoPipe db
       manager <- newManager tlsManagerSettings
       let env = CrawlerEnv lastCrawled user manager mongoPipe cfg

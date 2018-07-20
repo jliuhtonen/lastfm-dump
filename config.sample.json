@@ -1,6 +1,0 @@
-{
-    "apiKey": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
-    "mongoServer": "127.0.0.1",
-    "dbName": "scrobbles",
-    "pageSize": 200
-}
