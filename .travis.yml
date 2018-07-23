@@ -2,4 +2,4 @@ sudo: required
 services:
   - docker
 script:
-  - docker build -t last-fm-dump .
+  - docker build -t lastfm-dump .
