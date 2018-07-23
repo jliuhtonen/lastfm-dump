@@ -27,16 +27,14 @@ Install stack and...
 
 ```
 stack setup
-stack docker pull
-stack image container
+stack build
 ```
 
-And you're all set.
+Or use Docker:
+`docker build -t lastfm-dump .`
 
 ## Usage
 
-The program reads its configuration from config.json. You can find a sample configuration in file config.sample.json.
-
-Then, to transfer your data to Mongo, start your mongod and run the dump with your username as the command line parameter: 
+To sync your data to Mongo, start your mongod and run the dump with your username as the command line parameter: 
 
 `lastfm-dump username`
