@@ -103,7 +103,7 @@ usage = putStrLn "Usage: lastfm-dump username"
 latestScrobbleTimestamp :: Pipe -> Text -> IO (Maybe Int)
 latestScrobbleTimestamp mongoPipe databaseName = do
 	let run = access mongoPipe master databaseName
-	let latestScrobbleAction = findOne (select [] "scrobbles") {sort = ["scrobbledAt" =: (-1 :: Int)]}
+	let latestScrobbleAction = findOne (select [] databaseName) {sort = ["scrobbledAt" =: (-1 :: Int)]}
 	latestScrobbleDocument <- run latestScrobbleAction
 	let latestScrobbleTime = fmap (at "scrobbledAt") latestScrobbleDocument :: Maybe UTCTime
 	return $ fmap (round . utcTimeToPOSIXSeconds) latestScrobbleTime
