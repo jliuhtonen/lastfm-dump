@@ -61,7 +61,7 @@ requestWithParams key items user page from request = setQueryString params reque
 
 fetchTracks :: Int -> Crawler (Maybe LastFm.Response)
 fetchTracks page = do
-        (CrawlerEnv lastCrawled lastFmUser manager _ (Config key _ _ _ _ _ items)) <- ask
+        (CrawlerEnv lastCrawled lastFmUser manager _ (Config key _ _ _ _ _ items _)) <- ask
         let scrobblesSince = fmap (+ 1) lastCrawled
         request <- fmap (requestWithParams key items lastFmUser page scrobblesSince) $ parseUrl url
         response <- httpLbs request manager
@@ -98,8 +98,6 @@ recentTracks page = do
             Just (LastFm.Error code msg _) -> handleError page code msg
             Just (LastFm.RecentTracksResponse tracks) -> handleResponse tracks
 
-usage = putStrLn "Usage: lastfm-dump username"
-
 latestScrobbleTimestamp :: Pipe -> Text -> IO (Maybe Int)
 latestScrobbleTimestamp mongoPipe databaseName = do
 	let run = access mongoPipe master databaseName
@@ -115,11 +113,12 @@ numberOfPages = fetchTracks 1 >>= \response -> case response of
 
 crawl = numberOfPages >>= recentTracks
 
-initCrawler [user] = do
+main = do
   config <- readConfig
   case config of
     Nothing -> putStrLn "Malformed config"
     Just cfg -> do
+      let user = Config.lastFmUser cfg
       let mongoHost = unpack $ mongoServer cfg
       let mongoPort = Config.port cfg
       mongoPipe <- connect $ Host mongoHost mongoPort
@@ -130,8 +129,3 @@ initCrawler [user] = do
       let env = CrawlerEnv lastCrawled user manager mongoPipe cfg
       liftIO $ runReaderT crawl env
       close mongoPipe
-
-initCrawler [] = usage
-initCrawler (_:_) = usage
-
-main = getArgs >>= initCrawler

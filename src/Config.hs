@@ -17,7 +17,8 @@ data Config = Config {
     user :: !Text,
     password :: !Text,
     port :: PortID,
-    pageSize :: Int
+    pageSize :: Int,
+    lastFmUser :: String
 } deriving (Show, Generic)
 
 readConfig :: IO (Maybe Config) 
@@ -35,4 +36,12 @@ asConfig envMap = do
   mongoPassword <- fmap pack $ lookup "MONGODB_PASSWORD" envMap
   dbName <- fmap pack $ lookup "MONGODB_DBNAME" envMap
   pageSize <- fmap read $ lookup "PAGE_SIZE" envMap
-  Just Config { apiKey=apiKey, mongoServer=mongoServer, port=portid, dbName=dbName, user=mongoUser, password=mongoPassword, pageSize=pageSize }
+  lastFmUser <- lookup "LASTFM_USER" envMap
+  Just Config { apiKey=apiKey,
+      mongoServer=mongoServer,
+      port=portid,
+      dbName=dbName,
+      user=mongoUser,
+      password=mongoPassword,
+      pageSize=pageSize,
+      lastFmUser=lastFmUser }
