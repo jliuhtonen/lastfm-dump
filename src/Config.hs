@@ -6,8 +6,9 @@ import Prelude hiding (readFile)
 import GHC.Generics
 import Network (PortID(..))
 import Network.Socket (PortNumber)
-import Configuration.Dotenv (loadFile)
+import Configuration.Dotenv as Dotenv (loadFile)
 import Configuration.Dotenv.Types (defaultConfig)
+import System.Environment
 import Data.Text
 
 data Config = Config {
@@ -21,23 +22,19 @@ data Config = Config {
     lastFmUser :: String
 } deriving (Show, Generic)
 
-readConfig :: IO (Maybe Config) 
+readConfig :: IO Config
 readConfig = do
-    env <- loadFile defaultConfig
-    return $ asConfig env
-
-asConfig :: [(String, String)] -> Maybe Config
-asConfig envMap = do
-  apiKey <- fmap pack $ lookup "LASTFM_API_KEY" envMap
-  mongoServer <- fmap pack $ lookup "MONGODB_ADDRESS" envMap
-  mongoPort <- fmap read $ lookup "MONGODB_PORT" envMap
+  Dotenv.loadFile defaultConfig
+  apiKey <- fmap pack $ getEnv "LASTFM_API_KEY"
+  mongoServer <- fmap pack $ getEnv "MONGODB_ADDRESS"
+  mongoPort <- fmap read $ getEnv "MONGODB_PORT"
   let portid = PortNumber mongoPort
-  mongoUser <- fmap pack $ lookup "MONGODB_USER" envMap
-  mongoPassword <- fmap pack $ lookup "MONGODB_PASSWORD" envMap
-  dbName <- fmap pack $ lookup "MONGODB_DBNAME" envMap
-  pageSize <- fmap read $ lookup "PAGE_SIZE" envMap
-  lastFmUser <- lookup "LASTFM_USER" envMap
-  Just Config { apiKey=apiKey,
+  mongoUser <- fmap pack $ getEnv "MONGODB_USER"
+  mongoPassword <- fmap pack $ getEnv "MONGODB_PASSWORD"
+  dbName <- fmap pack $ getEnv "MONGODB_DBNAME"
+  pageSize <- fmap read $ getEnv "PAGE_SIZE"
+  lastFmUser <- getEnv "LASTFM_USER"
+  return $ Config { apiKey=apiKey,
       mongoServer=mongoServer,
       port=portid,
       dbName=dbName,

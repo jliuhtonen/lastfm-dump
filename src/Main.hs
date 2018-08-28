@@ -113,19 +113,15 @@ numberOfPages = fetchTracks 1 >>= \response -> case response of
 
 crawl = numberOfPages >>= recentTracks
 
-main = do
-  config <- readConfig
-  case config of
-    Nothing -> putStrLn "Malformed config"
-    Just cfg -> do
-      let user = Config.lastFmUser cfg
-      let mongoHost = unpack $ mongoServer cfg
-      let mongoPort = Config.port cfg
-      mongoPipe <- connect $ Host mongoHost mongoPort
-      let db = dbName cfg
-      access mongoPipe master db $ auth (Config.user cfg) (password cfg)
-      lastCrawled <- latestScrobbleTimestamp mongoPipe db
-      manager <- newManager tlsManagerSettings
-      let env = CrawlerEnv lastCrawled user manager mongoPipe cfg
-      liftIO $ runReaderT crawl env
-      close mongoPipe
+main = readConfig >>= \cfg -> do
+  let user = Config.lastFmUser cfg
+  let mongoHost = unpack $ mongoServer cfg
+  let mongoPort = Config.port cfg
+  mongoPipe <- connect $ Host mongoHost mongoPort
+  let db = dbName cfg
+  access mongoPipe master db $ auth (Config.user cfg) (password cfg)
+  lastCrawled <- latestScrobbleTimestamp mongoPipe db
+  manager <- newManager tlsManagerSettings
+  let env = CrawlerEnv lastCrawled user manager mongoPipe cfg
+  liftIO $ runReaderT crawl env
+  close mongoPipe
