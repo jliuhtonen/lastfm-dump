@@ -35,6 +35,15 @@ Or use Docker:
 
 ## Usage
 
-To sync your data to Mongo, start your mongod and run the dump with your username as the command line parameter: 
+To sync your data to Mongo, start your mongod and run `lastfm-dump` with the following env vars set either in `.env` file or environmental variables: 
 
-`lastfm-dump username`
+```
+MONGODB_PASSWORD=<secret>
+MONGODB_USER=<secret>
+MONGODB_DBNAME=<secret>
+MONGODB_ADDRESS=<secret>
+MONGODB_PORT=<secret>
+LASTFM_API_KEY=<secret>
+PAGE_SIZE=200
+LASTFM_USER=myUser
+```
