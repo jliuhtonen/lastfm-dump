@@ -11,7 +11,7 @@ RUN stack build --system-ghc
 FROM debian:stretch
 RUN mkdir -p /opt/lastfm-dump
 WORKDIR /opt/lastfm-dump
-RUN apt-get update && apt-get install -y libgmp-dev
+RUN apt-get update && apt-get install -y libgmp-dev netbase
 COPY --from=build /opt/build/.stack-work/install/x86_64-linux/lts-11.15/8.2.2/bin .
 RUN touch /opt/lastfm-dump/.env
 ENTRYPOINT ["/opt/lastfm-dump/lastfm-dump"]
